@@ -1,0 +1,71 @@
+import matplotlib.pyplot as plt
+import requests
+import torch
+from PIL import Image
+from torchvision.transforms import v2
+
+from .data import ImageDataset
+from .modules import FoundAD
+from .modules.cutpaste import CutPasteRectBatch
+from .modules.encoder.impl import DinoV2Encoder
+from .modules.projector.impl import TransformerProjector
+
+
+def visualize_cutpaste(
+    image: Image.Image,
+    augmentor: torch.nn.Module | None = None,
+    device: str = "cpu",
+) -> None:
+    """Visualizes an image before and after applying CutPaste augmentation.
+
+    Args:
+        image: Source PIL image.
+        augmentor: An instance of CutPasteBatch or CutPasteScarBatch. Defaults to
+            a standard CutPasteBatch instance.
+        device: Device to run the augmentation on ('cpu' or 'cuda').
+    """
+    if augmentor is None:
+        augmentor = CutPasteRectBatch()
+
+    augmentor = augmentor.to(device)
+
+    # 1. Convert PIL Image to Tensor (C, H, W) normalized to [0, 1]
+    to_tensor = v2.Compose([
+        v2.ToImage(),
+        v2.ToDtype(torch.float32, scale=True),
+    ])
+    img_tensor = to_tensor(image).unsqueeze(0).to(device)  # Shape: (1, C, H, W)
+
+    # 2. Apply CutPaste
+    augmented_tensor = augmentor(img_tensor)
+
+    # 3. Convert back to displayable numpy arrays (H, W, C)
+    orig_np = img_tensor.squeeze(0).permute(1, 2, 0).cpu().clamp(0, 1).numpy()
+    aug_np = augmented_tensor.squeeze(0).permute(1, 2, 0).cpu().clamp(0, 1).numpy()
+
+    # 4. Plot side-by-side
+    _fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+
+    axes[0].imshow(orig_np)
+    axes[0].set_title("Original (Before)", fontsize=13)
+    axes[0].axis("off")
+
+    axes[1].imshow(aug_np)
+    axes[1].set_title("CutPaste (After)", fontsize=13)
+    axes[1].axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
+def main():
+    url = 'http://images.cocodataset.org/val2017/000000039769.jpg'
+    image = Image.open(requests.get(url, stream=True).raw)
+
+
+    model = FoundAD(
+        DinoV2Encoder(),
+        TransformerProjector()
+    )
+
+    dataset = ImageDataset([image, image, image], model.process_image)
+

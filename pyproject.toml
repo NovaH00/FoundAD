@@ -1,0 +1,38 @@
+[project]
+name = "foundad"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "matplotlib>=3.11.2",
+    "pytorch-ignite>=0.5.5",
+    "requests>=2.34.2",
+    "tensorboard>=2.21.0",
+    "torch>=2.14.1",
+    "torchvision>=0.29.1",
+    "transformers>=5.22.2",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+torchvision = [
+  { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "foundad"
+
+[project.scripts]
+main = "foundad.main:main"
