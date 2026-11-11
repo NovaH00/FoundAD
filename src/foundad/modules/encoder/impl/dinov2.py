@@ -26,6 +26,9 @@ class DinoV2Encoder(Encoder):
 
         return out.pixel_values
 
+    def get_embed_dim(self) -> int:
+        return 384
+
     def encode(self, x: Tensor) -> Tensor:
         with torch.no_grad():
             out = self.model(pixel_values=x)

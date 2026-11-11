@@ -72,13 +72,12 @@ class TransformerBlock(nn.Module):
 class TransformerProjector(Projector):
     def __init__(
         self,
-        embed_dim: int = 384,
+        embed_dim: int,
         num_heads: int = 12,
         num_blocks: int = 6,
         mlp_ratio: int = 4
     ):
         super().__init__()
-
 
         self.transformer_blocks = nn.ModuleList([
             TransformerBlock(embed_dim, num_heads, mlp_ratio)

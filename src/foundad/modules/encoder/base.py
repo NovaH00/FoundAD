@@ -14,6 +14,9 @@ class Encoder(nn.Module):
     ) -> Tensor: ...
 
     @abstractmethod
+    def get_embed_dim(self) -> int: ...
+
+    @abstractmethod
     def encode(self, x: Tensor) -> Tensor: ...
 
     def forward(self, x: Tensor) -> Tensor:
