@@ -1,3 +1,8 @@
+from dataclasses import dataclass
+
+from torch import Tensor
+
+
 class ValueRange[T: int | float]:
     """Represents a numeric range with lower and upper bounds.
 
@@ -47,3 +52,18 @@ class ValueRange[T: int | float]:
             return self._upper_bound
         else:
             return value
+
+
+@dataclass
+class InferenceResult:
+    """Container for anomaly inference results."""
+
+    anomaly_map: Tensor
+    """Pixel-level anomaly heatmap interpolated to input image resolution. Shape: (B, 1, H, W)."""
+
+    anomaly_score: Tensor
+    """Image-level anomaly score per sample. Shape: (B,)."""
+
+    patch_anomaly: Tensor
+    """Token-level anomaly score before spatial interpolation. Shape: (B, L)."""
+

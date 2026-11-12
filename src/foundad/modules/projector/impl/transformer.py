@@ -1,3 +1,5 @@
+from typing import Any
+
 import torch.nn.functional as F
 from torch import Tensor, nn
 
@@ -79,6 +81,11 @@ class TransformerProjector(Projector):
     ):
         super().__init__()
 
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.num_blocks = num_blocks
+        self.mlp_ratio = mlp_ratio
+
         self.transformer_blocks = nn.ModuleList([
             TransformerBlock(embed_dim, num_heads, mlp_ratio)
             for _ in range(num_blocks)
@@ -89,4 +96,14 @@ class TransformerProjector(Projector):
             x = x + block(x)
 
         return x
+
+    def get_config(self) -> dict[str, Any]:
+        return {
+            "type": self.__class__.__name__,
+            "embed_dim": self.embed_dim,
+            "num_heads": self.num_heads,
+            "num_blocks": self.num_blocks,
+            "mlp_ratio": self.mlp_ratio,
+        }
+
 

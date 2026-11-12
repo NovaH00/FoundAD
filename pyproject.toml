@@ -5,13 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "fastapi>=0.162.5",
     "matplotlib>=3.11.2",
+    "python-multipart>=0.0.33",
     "pytorch-ignite>=0.5.5",
     "requests>=2.34.2",
     "tensorboard>=2.21.0",
     "torch>=2.14.1",
     "torchvision>=0.29.1",
     "transformers>=5.22.2",
+    "uvicorn>=0.54.0",
 ]
 
 [[tool.uv.index]]

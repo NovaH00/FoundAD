@@ -1,5 +1,8 @@
+from .inferencer import FoundADInferencer, InferenceResult
 from .trainer import FoundADTrainer
 
 __all__ = [
-    "FoundADTrainer"
+    "FoundADInferencer",
+    "FoundADTrainer",
+    "InferenceResult",
 ]

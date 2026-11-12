@@ -1,205 +1,159 @@
+from argparse import ArgumentParser
+from datetime import datetime
+from pathlib import Path
+
+from foundad import DinoV2Encoder, FoundAD, TransformerProjector
+
+
 def run(
     *,
     dataset_dir: str,
-    learning_rate: float,
-    epochs: int,
-    batches: int,
-    batch_size: int,
-    device: str,
-    num_heads: int,
-    num_blocks: int,
-    mlp_ratio: int,
-):
-    from pathlib import Path
-
-    import torch
-    from PIL import Image
-    from torch import nn
-    from torch.optim import AdamW
-
-    from foundad.data.dataloader import get_train_loader
-    from foundad.data.dataset import TrainDataset
-    from foundad.engines.trainer import FoundADTrainer
-    from foundad.modules import FoundAD
-    from foundad.modules.cutpaste import CutPasteRectBatch
-    from foundad.modules.encoder.impl import DinoV2Encoder
-    from foundad.modules.projector.impl import TransformerProjector
-
-
-    supported_image_extensions = list(
-        Image
-            .registered_extensions()
-            .keys()
-    )
-
-    directory = Path(dataset_dir)
-
-    image_paths = [
-        file
-        for file in directory.iterdir()
-        if (
-            file.is_file()
-            and file.suffix.lower() in supported_image_extensions
-        )
-    ]
-
-    if len(image_paths) <= 0:
-        raise FileNotFoundError(
-            f"There are no image files in {dataset_dir}.\n"
-          + f"Supported image extensions: {", ".join(supported_image_extensions)}"
-        )
-
-    images = [
-        Image.open(p)
-        for p in image_paths
-    ]
-
-    print(f"Loaded {len(images)} image(s) to dataset")
-
-    # In the paper, they tested with 4 and 10 samples
-    # So we use 4 as the lower bound.
-    if len(images) < 4:
-        print(
-            f"WARNING: Amount of available image ({len(images)}) "
-             "is less than recommended amount of images (4). "
-             "Consider collecting 4 to 10 samples and re-train if accuracy is low"
-        )
-
-    if device == "cuda" and not torch.cuda.is_available():
-        raise RuntimeError(
-            "CUDA requested but CUDA is not available"
-        )
-
-    train_device: torch.device
-    if (device == "cuda" or device == "auto") and torch.cuda.is_available():
-        train_device = torch.device("cuda")
+    encoder_size: str = "small",
+    learning_rate: float = 1e-4,
+    epochs: int = 100,
+    batches: int = 16,
+    batch_size: int = 32,
+    device: str = "auto",
+    num_heads: int = 12,
+    num_blocks: int = 6,
+    mlp_ratio: int = 4,
+    output_dir: str | None = None,
+) -> None:
+    # 1. Output directory
+    if output_dir is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_output_dir = Path("results") / f"exp_{timestamp}"
     else:
-        train_device = torch.device("cpu")
+        run_output_dir = Path(output_dir)
 
-    print(f"Using device: {train_device}")
+    print(f"Results and checkpoints will be saved to: {run_output_dir}")
 
-    encoder = DinoV2Encoder()
+    # 2. Build model with user-selected encoder and projector
+    print(f"Initializing DinoV2Encoder('{encoder_size}')...")
+    encoder = DinoV2Encoder(encoder_size)
+
+    print("Initializing TransformerProjector...")
     projector = TransformerProjector(
-        encoder.get_embed_dim(),
-        num_heads,
-        num_blocks,
-        mlp_ratio
+        embed_dim=encoder.get_embed_dim(),
+        num_heads=num_heads,
+        num_blocks=num_blocks,
+        mlp_ratio=mlp_ratio,
     )
+
     model = FoundAD(encoder, projector)
 
-    model.to(train_device)
-
-    dataset = TrainDataset(images, model.process_image)
-
-    train_loader = get_train_loader(
-        dataset=dataset,
+    # 3. Train using programming interface
+    model.train_model(
+        dataset_dir=dataset_dir,
+        epochs=epochs,
         batch_size=batch_size,
-        batch_per_epoch=batches
+        batches=batches,
+        learning_rate=learning_rate,
+        device=None if device == "auto" else device,
+        output_dir=run_output_dir,
     )
 
-    trainer = FoundADTrainer(
-        model=model,
-        optimizer_factory=lambda params: AdamW(
-            params,
-            learning_rate
-        ),
-        criterion=nn.MSELoss(),
-        cutpaste=CutPasteRectBatch(),
-        device=train_device
-    )
-
-    # trainer.run(train_loader, max_epochs=epochs)
-
-def main():
-    import sys
-    from argparse import ArgumentParser
+    # 4. Save final projector weights checkpoint
+    projector_final_path = run_output_dir / "checkpoints" / "projector_final.pt"
+    model.save(projector_final_path)
+    print(f"Final projector weights saved to: {projector_final_path}")
 
 
-    parser = ArgumentParser()
+def main() -> None:
+    parser = ArgumentParser(description="Train FoundAD anomaly detection model.")
 
     parser.add_argument(
         "--dataset-dir",
         type=str,
         required=True,
-        help="Path to the folder containing 4 to 10 normal images."
+        help="Path to folder containing normal training images.",
+    )
+
+    parser.add_argument(
+        "--encoder-size",
+        type=str,
+        choices=["small", "base", "large"],
+        default="small",
+        help="DinoV2 encoder size ('small', 'base', 'large'). Default: small.",
     )
 
     parser.add_argument(
         "--learning-rate",
         type=float,
-        required=False,
         default=1e-4,
-        help="Learning rate (Default: 1e-4)."
-    )
-
-    parser.add_argument(
-        "--device",
-        type=str,
-        required=False,
-        default="auto",
-        help="Device to train the model. Options: cpu, cuda, auto (Default: auto)."
+        help="Learning rate for AdamW optimizer (Default: 1e-4).",
     )
 
     parser.add_argument(
         "--epochs",
         type=int,
-        required=True,
-        help="Number of epochs to train the model."
+        default=100,
+        help="Number of epochs to train (Default: 100).",
     )
 
     parser.add_argument(
         "--batches",
         type=int,
-        required=True,
-        help="Number of batches in a single training epoch."
+        default=16,
+        help="Number of batches in a single training epoch (Default: 16).",
     )
 
     parser.add_argument(
         "--batch-size",
         type=int,
-        required=True,
-        help="Number of samples in a single batch."
+        default=32,
+        help="Batch size per training step (Default: 32).",
+    )
+
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        help="Training device ('cpu', 'cuda', 'auto'). Default: auto.",
     )
 
     parser.add_argument(
         "--num-heads",
         type=int,
-        required=False,
         default=12,
-        help="Number of heads in the projector's self-attention layer (Default: 12)."
+        help="Number of attention heads in TransformerProjector (Default: 12).",
     )
 
     parser.add_argument(
         "--num-blocks",
         type=int,
-        required=False,
         default=6,
-        help="Number of transformer blocks in the projector (Default: 6)."
+        help="Number of transformer blocks in TransformerProjector (Default: 6).",
     )
 
     parser.add_argument(
         "--mlp-ratio",
         type=int,
-        required=False,
         default=4,
-        help=(
-            "Controls the expansion ratio of the hidden dimension in the MLP (feed-forward) block "
-          + "relative to the input embedding dimension (Default: 4)."
-        )
+        help="MLP expansion ratio in TransformerProjector (Default: 4).",
     )
 
-    args = parser.parse_args(sys.argv[1:])
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Directory to save logs and checkpoints (Default: results/exp_<timestamp>).",
+    )
+
+    args = parser.parse_args()
 
     run(
-        dataset_dir   = args.dataset_dir,
-        epochs        = args.epochs,
-        learning_rate = args.learning_rate,
-        batches       = args.batches,
-        batch_size    = args.batch_size,
-        device        = args.device,
-        num_heads     = args.num_heads,
-        num_blocks    = args.num_blocks,
-        mlp_ratio     = args.mlp_ratio
+        dataset_dir=args.dataset_dir,
+        encoder_size=args.encoder_size,
+        epochs=args.epochs,
+        learning_rate=args.learning_rate,
+        batches=args.batches,
+        batch_size=args.batch_size,
+        device=args.device,
+        num_heads=args.num_heads,
+        num_blocks=args.num_blocks,
+        mlp_ratio=args.mlp_ratio,
+        output_dir=args.output_dir,
     )
 
 

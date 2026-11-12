@@ -1,3 +1,4 @@
+from typing import Any, Literal
 
 import torch
 from PIL.Image import Image
@@ -8,18 +9,21 @@ from ..base import Encoder
 
 
 class DinoV2Encoder(Encoder):
-    MODEL_NAME = "facebook/dinov2-with-registers-small"
-    PROCESSOR = AutoImageProcessor.from_pretrained(MODEL_NAME)
-
-    def __init__(self):
+    def __init__(
+        self,
+        size: Literal["small", "base", "large"] = "small"
+    ):
         super().__init__()
-        self.model = AutoModel.from_pretrained(self.MODEL_NAME)
+        self.size = size
+        self.model_name = f"facebook/dinov2-with-registers-{size}"
+        self.model = AutoModel.from_pretrained(self.model_name)
+        self.processor = AutoImageProcessor.from_pretrained(self.model_name)
 
-    @staticmethod
     def process_image(
+        self,
         image_input: Image | list[Image] | Tensor | list[Tensor]
     ) -> Tensor:
-        out = DinoV2Encoder.PROCESSOR(
+        out = self.processor(
             images=image_input,
             return_tensors="pt"
         )
@@ -27,7 +31,7 @@ class DinoV2Encoder(Encoder):
         return out.pixel_values
 
     def get_embed_dim(self) -> int:
-        return 384
+        return self.model.config.hidden_size
 
     def encode(self, x: Tensor) -> Tensor:
         with torch.no_grad():
@@ -43,3 +47,9 @@ class DinoV2Encoder(Encoder):
         patches = out.last_hidden_state[:, 5:, :]
 
         return patches
+
+    def get_config(self) -> dict[str, Any]:
+        return {
+            "type": self.__class__.__name__,
+            "size": self.size,
+        }
