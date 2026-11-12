@@ -1,14 +1,13 @@
 from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
-
-from foundad import DinoV2Encoder, FoundAD, TransformerProjector
+from typing import Literal
 
 
 def run(
     *,
     dataset_dir: str,
-    encoder_size: str = "small",
+    encoder_size: Literal["small", "base", "large"] = "small",
     learning_rate: float = 1e-4,
     epochs: int = 100,
     batches: int = 16,
@@ -19,6 +18,10 @@ def run(
     mlp_ratio: int = 4,
     output_dir: str | None = None,
 ) -> None:
+
+    from foundad import DinoV2Encoder, FoundAD, TransformerProjector
+
+
     # 1. Output directory
     if output_dir is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

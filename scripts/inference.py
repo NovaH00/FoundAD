@@ -3,41 +3,6 @@ import json
 from argparse import ArgumentParser
 from pathlib import Path
 
-import torch
-from PIL import Image
-
-from foundad import FoundAD
-
-
-def save_heatmap_overlay(
-    image: Image.Image,
-    anomaly_map: torch.Tensor,
-    output_path: Path,
-) -> None:
-    """Saves a blended anomaly heatmap overlay image to disk."""
-    import numpy as np
-    from matplotlib import cm
-
-    # Resize original image to match anomaly map if necessary
-    h, w = anomaly_map.shape[-2], anomaly_map.shape[-1]
-    orig_img = image.resize((w, h)).convert("RGB")
-    orig_np = np.array(orig_img, dtype=np.float32) / 255.0
-
-    # Normalize heatmap to [0, 1]
-    heatmap_np = anomaly_map.squeeze().cpu().numpy()
-    h_min, h_max = heatmap_np.min(), heatmap_np.max()
-    norm_heatmap = (heatmap_np - h_min) / (h_max - h_min + 1e-8)
-
-    # Colorize with jet colormap
-    colored_heatmap = cm.jet(norm_heatmap)[:, :, :3]
-
-    # Alpha blend: 60% original image + 40% heatmap
-    blended = (0.6 * orig_np + 0.4 * colored_heatmap).clip(0, 1)
-    result_img = Image.fromarray((blended * 255).astype(np.uint8))
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    result_img.save(output_path)
-
 
 def run_cli(
     *,
@@ -49,6 +14,44 @@ def run_cli(
     threshold: float | None = None,
     save_heatmaps: bool = False,
 ) -> None:
+
+    import torch
+    from PIL import Image
+
+    from foundad import FoundAD
+
+
+    def save_heatmap_overlay(
+        image: Image.Image,
+        anomaly_map: torch.Tensor,
+        output_path: Path,
+    ) -> None:
+        """Saves a blended anomaly heatmap overlay image to disk."""
+        import numpy as np
+        from matplotlib import colormaps
+
+        # Resize original image to match anomaly map if necessary
+        h, w = anomaly_map.shape[-2], anomaly_map.shape[-1]
+        orig_img = image.resize((w, h)).convert("RGB")
+        orig_np = np.array(orig_img, dtype=np.float32) / 255.0
+
+        # Normalize heatmap to [0, 1]
+        heatmap_np = anomaly_map.squeeze().cpu().numpy()
+        h_min, h_max = heatmap_np.min(), heatmap_np.max()
+        norm_heatmap = (heatmap_np - h_min) / (h_max - h_min + 1e-8)
+
+        # Colorize with jet colormap
+        cmap = colormaps["jet"]
+        colored_heatmap = cmap(norm_heatmap)[:, :, :3]
+
+        # Alpha blend: 60% original image + 40% heatmap
+        blended = (0.6 * orig_np + 0.4 * colored_heatmap).clip(0, 1)
+        result_img = Image.fromarray((blended * 255).astype(np.uint8))
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        result_img.save(output_path)
+
+
     infer_device = (
         torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if device == "auto"
@@ -128,9 +131,13 @@ def run_api(
 ) -> None:
     from typing import Annotated
 
+    import torch
     import uvicorn
     from fastapi import FastAPI, File, HTTPException, UploadFile
     from fastapi.responses import Response
+    from PIL import Image
+
+    from foundad import FoundAD
 
     infer_device = (
         torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -200,7 +207,7 @@ def run_api(
 
         # Generate blended heatmap in-memory
         import numpy as np
-        from matplotlib import cm
+        from matplotlib import colormaps
 
         buf = io.BytesIO()
         h, w = pred.anomaly_map.shape[-2], pred.anomaly_map.shape[-1]
@@ -210,7 +217,8 @@ def run_api(
         heatmap_np = pred.anomaly_map[0, 0].cpu().numpy()
         h_min, h_max = heatmap_np.min(), heatmap_np.max()
         norm_heatmap = (heatmap_np - h_min) / (h_max - h_min + 1e-8)
-        colored_heatmap = cm.jet(norm_heatmap)[:, :, :3]
+        cmap = colormaps["jet"]
+        colored_heatmap = cmap(norm_heatmap)[:, :, :3]
 
         blended = (0.6 * orig_np + 0.4 * colored_heatmap).clip(0, 1)
         result_img = Image.fromarray((blended * 255).astype(np.uint8))

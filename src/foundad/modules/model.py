@@ -339,14 +339,21 @@ class FoundAD(nn.Module):
         infer_device = next(self.projector.parameters()).device
         self.eval()
 
-        # Handle file paths
+        # Handle file paths and image formats
         if isinstance(images, (str, Path)):
             pil_images = [Image.open(images).convert("RGB")]
             x = self.process_image(pil_images).to(infer_device)
-        elif isinstance(images, list) and images and isinstance(images[0], (str, Path)):
-            pil_images = [Image.open(p).convert("RGB") for p in images]
+        elif isinstance(images, list):
+            pil_images: list[Image.Image] = []
+            for item in images:
+                if isinstance(item, (str, Path)):
+                    pil_images.append(Image.open(item).convert("RGB"))
+                elif isinstance(item, Image.Image):
+                    pil_images.append(item)
+                else:
+                    raise TypeError(f"Unsupported item in images list: {type(item)}")
             x = self.process_image(pil_images).to(infer_device)
-        elif isinstance(images, (Image.Image, list)):
+        elif isinstance(images, Image.Image):
             x = self.process_image(images).to(infer_device)
         elif isinstance(images, Tensor):
             x = images.to(infer_device)
