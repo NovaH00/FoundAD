@@ -74,6 +74,7 @@ class FoundAD(nn.Module):
         output_dir: str | Path | None = None,
         cutpaste: CutPasteModel | None = None,
         criterion: nn.Module | None = None,
+        num_workers: int = 0,
     ) -> FoundAD:
         """Trains the projector using CutPaste self-supervision on clean images.
 
@@ -88,6 +89,7 @@ class FoundAD(nn.Module):
             output_dir: Directory to save checkpoints, logs, and config.
             cutpaste: CutPaste augmentation model. Defaults to CutPasteRectBatch.
             criterion: Loss criterion. Defaults to nn.MSELoss().
+            num_workers: Number of worker processes for data loading (Default: 0).
 
         Returns:
             Trained FoundAD model instance.
@@ -136,6 +138,7 @@ class FoundAD(nn.Module):
             dataset=dataset,
             batch_size=batch_size,
             batch_per_epoch=batches,
+            num_workers=num_workers,
         )
 
         # Build config dictionary for tracking
@@ -150,6 +153,7 @@ class FoundAD(nn.Module):
                 "image_paths": image_paths,
                 "batch_size": batch_size,
                 "batch_per_epoch": batches,
+                "num_workers": num_workers,
             },
             "training": {
                 "epochs": epochs,

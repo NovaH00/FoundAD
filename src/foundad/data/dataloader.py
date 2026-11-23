@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader, RandomSampler
 
-from .dataset import TrainDataset
+from .dataset import EvaluateDataset, TrainDataset
 
 
 def get_train_loader(
@@ -34,3 +34,21 @@ def get_train_loader(
         pin_memory=pin_memory,
         generator=generator
     )
+
+
+def get_inference_loader(
+    *,
+    dataset: EvaluateDataset,
+    batch_size: int = 1,
+    num_workers: int = 0,
+    pin_memory: bool = True,
+) -> DataLoader[tuple[str, torch.Tensor]]:
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        persistent_workers=num_workers > 0,
+        pin_memory=pin_memory,
+    )
+

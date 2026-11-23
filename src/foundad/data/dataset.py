@@ -36,21 +36,22 @@ class TrainDataset(Dataset):
         return self.transform(image).squeeze(0)
 
 
-class EvaluateDataset(Dataset):
+class EvaluateDataset(Dataset[tuple[str, torch.Tensor]]):
     def __init__(
         self,
-        image_paths: Iterable[Path],
-        transform: Callable[[Image.Image], torch.Tensor]
+        image_paths: Iterable[Path | str],
+        transform: Callable[[Image.Image], torch.Tensor],
     ):
-        self.image_paths = list(image_paths)
+        self.image_paths = [Path(p) for p in image_paths]
         self.transform = transform
 
     def __len__(self) -> int:
         return len(self.image_paths)
 
-    def __getitem__(self, index: int) -> torch.Tensor:
-        image = Image.open(self.image_paths[index]).convert("RGB")
+    def __getitem__(self, index: int) -> tuple[str, torch.Tensor]:
+        p = self.image_paths[index]
+        image = Image.open(p).convert("RGB")
 
-        return self.transform(image)
+        return str(p), self.transform(image).squeeze(0)
 
 

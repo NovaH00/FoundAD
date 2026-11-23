@@ -17,6 +17,7 @@ def run(
     num_blocks: int = 6,
     mlp_ratio: int = 4,
     output_dir: str | None = None,
+    num_workers: int = 0,
 ) -> None:
 
     from foundad import DinoV2Encoder, FoundAD, TransformerProjector
@@ -54,6 +55,7 @@ def run(
         learning_rate=learning_rate,
         device=None if device == "auto" else device,
         output_dir=run_output_dir,
+        num_workers=num_workers,
     )
 
     # 4. Save final projector weights checkpoint
@@ -143,6 +145,13 @@ def main() -> None:
         help="Directory to save logs and checkpoints (Default: results/exp_<timestamp>).",
     )
 
+    parser.add_argument(
+        "-w", "--num-workers",
+        type=int,
+        default=0,
+        help="Number of data loader worker processes (Default: 0).",
+    )
+
     args = parser.parse_args()
 
     run(
@@ -157,6 +166,7 @@ def main() -> None:
         num_blocks=args.num_blocks,
         mlp_ratio=args.mlp_ratio,
         output_dir=args.output_dir,
+        num_workers=args.num_workers,
     )
 
 

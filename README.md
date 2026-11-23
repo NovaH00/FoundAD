@@ -131,6 +131,7 @@ Options:
 | `--num-heads` | `int` | `12` | Projector attention heads. |
 | `--num-blocks` | `int` | `6` | Projector transformer blocks. |
 | `--mlp-ratio` | `int` | `4` | Projector MLP expansion ratio. |
+| `--num-workers` | `int` | `0` | Number of DataLoader worker processes. |
 | `--output-dir` | `str` | `results/exp_<timestamp>` | Output directory for checkpoints and logs. |
 
 ---

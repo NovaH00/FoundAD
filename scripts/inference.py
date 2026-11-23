@@ -13,6 +13,7 @@ def run_cli(
     device: str = "auto",
     threshold: float | None = None,
     save_heatmaps: bool = False,
+    num_workers: int = 0,
 ) -> None:
 
     import torch
@@ -76,21 +77,29 @@ def run_cli(
     else:
         raise FileNotFoundError(f"Input path not found: {input_p}")
 
-    print(f"Running inference on {len(image_files)} image(s)...")
+    print(f"Running inference on {len(image_files)} image(s) (num_workers={num_workers})...")
+
+    from foundad.data import EvaluateDataset, get_inference_loader
+
+    dataset = EvaluateDataset(image_files, transform=model.process_image)
+    dataloader = get_inference_loader(
+        dataset=dataset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        pin_memory=(infer_device.type == "cuda"),
+    )
 
     results: list[dict] = []
     output_dir = Path(output) if output != "stdout" else None
     if output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
 
-    for i in range(0, len(image_files), batch_size):
-        batch_files = image_files[i : i + batch_size]
-        pil_images = [Image.open(f).convert("RGB") for f in batch_files]
+    for batch_paths, batch_tensors in dataloader:
+        pred = model.predict(batch_tensors)
 
-        pred = model.predict(pil_images)
-
-        for j, file_path in enumerate(batch_files):
+        for j, file_path_str in enumerate(batch_paths):
             score = float(pred.anomaly_score[j].item())
+            file_path = Path(file_path_str)
             item = {
                 "file": str(file_path.resolve()),
                 "anomaly_score": round(score, 6),
@@ -103,8 +112,9 @@ def run_cli(
 
             if output_dir is not None and save_heatmaps:
                 heatmap_file = output_dir / f"heatmap_{file_path.stem}.png"
+                orig_image = Image.open(file_path).convert("RGB")
                 save_heatmap_overlay(
-                    pil_images[j],
+                    orig_image,
                     pred.anomaly_map[j : j + 1],
                     heatmap_file,
                 )
@@ -282,6 +292,12 @@ def main() -> None:
         action="store_true",
         help="When --output is a directory, saves visual heatmap PNG overlays.",
     )
+    cli_parser.add_argument(
+        "-w", "--num-workers",
+        type=int,
+        default=0,
+        help="Number of worker processes for data loading (Default: 0).",
+    )
 
     # API subparser
     api_parser = subparsers.add_parser("api", help="Launch FastAPI REST server.")
@@ -327,6 +343,7 @@ def main() -> None:
             device=args.device,
             threshold=args.threshold,
             save_heatmaps=args.save_heatmaps,
+            num_workers=args.num_workers,
         )
     elif args.command == "api":
         run_api(
