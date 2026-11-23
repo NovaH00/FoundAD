@@ -1,10 +1,10 @@
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import torch
 import torch.nn.functional as F
-from PIL import Image
+from PIL import Image, ImageFile
 from torch import Tensor, nn
 from torch.optim import AdamW
 
@@ -15,6 +15,16 @@ from foundad.types import InferenceResult
 
 from .encoder import Encoder
 from .projector import Projector
+
+
+class ProcessorTransform:
+    """Lightweight picklable preprocessor wrapper for DataLoaders."""
+
+    def __init__(self, processor: Any) -> None:
+        self.processor = processor
+
+    def __call__(self, img: Image.Image) -> Tensor:
+        return self.processor(images=img, return_tensors="pt").pixel_values
 
 
 class FoundAD(nn.Module):
@@ -34,6 +44,13 @@ class FoundAD(nn.Module):
         image_input: Image.Image | list[Image.Image] | Tensor | list[Tensor],
     ) -> Tensor:
         return self.encoder.process_image(image_input)
+
+    def get_transform(self) -> Callable[[Image.Image], Tensor]:
+        """Returns a lightweight CPU image transformation function for DataLoaders."""
+        processor = getattr(self.encoder, "processor", None)
+        if processor is not None:
+            return ProcessorTransform(processor)
+        return self.process_image
 
     def forward(self, X: Tensor, Z: Tensor) -> tuple[Tensor, Tensor]:
         with torch.no_grad():
@@ -126,14 +143,18 @@ class FoundAD(nn.Module):
                 raise FileNotFoundError(
                     f"No supported image files found in {directory}."
                 )
+            ImageFile.LOAD_TRUNCATED_IMAGES = True  # ty: ignore[invalid-assignment]
             image_paths = [str(f.resolve()) for f in matched_files]
-            loaded_images = [Image.open(p) for p in matched_files]
+            loaded_images = []
+            for f in matched_files:
+                with Image.open(f) as img:
+                    loaded_images.append(img.convert("RGB"))
         elif images is not None:
             loaded_images = list(images)
         else:
             raise ValueError("Either `dataset_dir` or `images` must be provided for training.")
 
-        dataset = TrainDataset(loaded_images, self.process_image)
+        dataset = TrainDataset(loaded_images, self.get_transform())
         train_loader = get_train_loader(
             dataset=dataset,
             batch_size=batch_size,

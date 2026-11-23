@@ -81,7 +81,7 @@ def run_cli(
 
     from foundad.data import EvaluateDataset, get_inference_loader
 
-    dataset = EvaluateDataset(image_files, transform=model.process_image)
+    dataset = EvaluateDataset(image_files, transform=model.get_transform())
     dataloader = get_inference_loader(
         dataset=dataset,
         batch_size=batch_size,
@@ -94,30 +94,38 @@ def run_cli(
     if output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
 
-    for batch_paths, batch_tensors in dataloader:
-        pred = model.predict(batch_tensors)
+    try:
+        for batch_paths, batch_tensors in dataloader:
+            pred = model.predict(batch_tensors)
 
-        for j, file_path_str in enumerate(batch_paths):
-            score = float(pred.anomaly_score[j].item())
-            file_path = Path(file_path_str)
-            item = {
-                "file": str(file_path.resolve()),
-                "anomaly_score": round(score, 6),
-            }
-            if threshold is not None:
-                item["is_anomaly"] = score >= threshold
-                item["threshold"] = threshold
+            for j, file_path_str in enumerate(batch_paths):
+                score = float(pred.anomaly_score[j].item())
+                file_path = Path(file_path_str)
+                item = {
+                    "file": str(file_path.resolve()),
+                    "anomaly_score": round(score, 6),
+                }
+                if threshold is not None:
+                    item["is_anomaly"] = score >= threshold
+                    item["threshold"] = threshold
 
-            results.append(item)
+                results.append(item)
 
-            if output_dir is not None and save_heatmaps:
-                heatmap_file = output_dir / f"heatmap_{file_path.stem}.png"
-                orig_image = Image.open(file_path).convert("RGB")
-                save_heatmap_overlay(
-                    orig_image,
-                    pred.anomaly_map[j : j + 1],
-                    heatmap_file,
-                )
+                if output_dir is not None and save_heatmaps:
+                    heatmap_file = output_dir / f"heatmap_{file_path.stem}.png"
+                    orig_image = Image.open(file_path).convert("RGB")
+                    save_heatmap_overlay(
+                        orig_image,
+                        pred.anomaly_map[j : j + 1],
+                        heatmap_file,
+                    )
+    finally:
+        iterator = getattr(dataloader, "_iterator", None)
+        if iterator is not None and hasattr(iterator, "_shutdown_workers"):
+            iterator._shutdown_workers()
+        if torch.cuda.is_available():
+            torch.cuda.ipc_collect()
+            torch.cuda.empty_cache()
 
     if output == "stdout":
         print(json.dumps(results, indent=2))

@@ -14,7 +14,7 @@ class SelfAttention(nn.Module):
 
         if embed_dim % num_heads != 0:
             raise ValueError(
-                "Embedding dimension must be divisible by number of attention heads"
+                f"Embedding dimension ({embed_dim}) is not divisible by number of attention heads ({num_heads})"
             )
 
         self.embed_dim = embed_dim
