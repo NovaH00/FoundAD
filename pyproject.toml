@@ -36,6 +36,3 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-name = "foundad"
-
-[project.scripts]
-main = "foundad.main:main"
